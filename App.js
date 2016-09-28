@@ -54,7 +54,12 @@ Ext.define('CustomApp', {
 					{
 						property: 'Release.Name',
 						value: scope.record.data.Name
-					}
+					} /*,  //Only look at accepted work items
+					{
+						property: 'ScheduleState',
+						operator: '>=',
+						value: 'Accepted'
+					} */
 				],
 				context: dataScope,
 				limit: Infinity

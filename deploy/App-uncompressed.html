@@ -63,6 +63,11 @@
 					{
 						property: 'Release.Name',
 						value: scope.record.data.Name
+					},
+					{
+						property: 'ScheduleState',
+						operator: '>=',
+						value: 'Accepted'
 					}
 				],
 				context: dataScope,
