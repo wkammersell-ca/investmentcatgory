@@ -35,7 +35,6 @@ Ext.define('CustomApp', {
 			this.down( 'label' ).destroy();
 		}
 		
-		// ( 'Adding mask...');
 		// Show loading message
 		this._myMask = new Ext.LoadMask( Ext.getBody(),
 			{
@@ -44,7 +43,6 @@ Ext.define('CustomApp', {
 		);
 		this._myMask.show();
 		
-		// ( 'Building Store...');
 		// Load all the work items for this release
 		var dataScope = this.getContext().getDataContext();
 		var store = Ext.create(
@@ -64,7 +62,7 @@ Ext.define('CustomApp', {
 			this
 		);
 		
-		// ( 'Resetting global variables...' );
+		// Resetting global variables
 		this.features = {};
 		
 		this.features[ this.cvFeatureId ] = {};
@@ -85,7 +83,6 @@ Ext.define('CustomApp', {
 		this.workItems = [];
 		this.totalPoints = 0;
 		
-		// ( 'Loading Store...');		
 		store.load( {
 				scope: this,
 				callback: function( records, operation ) {
@@ -93,12 +90,12 @@ Ext.define('CustomApp', {
 						if (records.length > 0) {
 								_.each(records, function(record){
 									var featureId = this.noFeatureId;
-									if ( record.raw.Feature ) {
-										featureId = record.raw.Feature.ObjectID;
-									} else if ( record.raw.Tags && ( _.find( record.raw.Tags._tagsNameArray, function( tag ) {
+									if ( record.raw.Tags && ( _.find( record.raw.Tags._tagsNameArray, function( tag ) {
 												return ( tag.Name == 'Customer Voice' );
 											} ) ) ) {
 										featureId = this.cvFeatureId;
+									} else if ( record.raw.Feature ) {
+										featureId = record.raw.Feature.ObjectID;
 									} else if ( record.get('_type') == 'defect' ) {
 										featureId = this.defectFeatureId;
 									}
@@ -111,8 +108,6 @@ Ext.define('CustomApp', {
 									this.totalPoints += record.raw.PlanEstimate;
 								},this);
 							
-							// ( this.features);
-							// ( 'Loading Features...' );
 							this._myMask.msg = 'Loading Features...';
 							this.loadFeatures( 0 );
 						}
@@ -125,7 +120,6 @@ Ext.define('CustomApp', {
 	},
 	
 	loadFeatures: function( featureIndex ) {
-		// ( 'Feature Index = ' + featureIndex);
 		var keys = Object.keys( this.features );
 		
 		if ( featureIndex >= keys.length ) {
@@ -179,7 +173,6 @@ Ext.define('CustomApp', {
 	
 	compileData: function(){
 		this._myMask.msg = 'Compiling Data...';
-		// ( 'Compiling Data ... ' );
 		
 		var investmentSums = {};
 		_.each( this.features, function( feature ) {

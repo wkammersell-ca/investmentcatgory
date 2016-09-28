@@ -36,7 +36,6 @@
 	},
 	
 	start: function( scope ) {
-		console.log( 'Starting...');	
 		// Delete any existing UI components
 		if( this.down( 'rallychart' ) ) {
 			this.down( 'rallychart' ).destroy();
@@ -45,7 +44,6 @@
 			this.down( 'label' ).destroy();
 		}
 		
-		console.log( 'Adding mask...');
 		// Show loading message
 		this._myMask = new Ext.LoadMask( Ext.getBody(),
 			{
@@ -54,7 +52,6 @@
 		);
 		this._myMask.show();
 		
-		console.log( 'Building Store...');
 		// Load all the work items for this release
 		var dataScope = this.getContext().getDataContext();
 		var store = Ext.create(
@@ -74,7 +71,7 @@
 			this
 		);
 		
-		console.log( 'Resetting global variables...' );
+		// Resetting global variables
 		this.features = {};
 		
 		this.features[ this.cvFeatureId ] = {};
@@ -95,7 +92,6 @@
 		this.workItems = [];
 		this.totalPoints = 0;
 		
-		console.log( 'Loading Store...');		
 		store.load( {
 				scope: this,
 				callback: function( records, operation ) {
@@ -103,12 +99,12 @@
 						if (records.length > 0) {
 								_.each(records, function(record){
 									var featureId = this.noFeatureId;
-									if ( record.raw.Feature ) {
-										featureId = record.raw.Feature.ObjectID;
-									} else if ( record.raw.Tags && ( _.find( record.raw.Tags._tagsNameArray, function( tag ) {
+									if ( record.raw.Tags && ( _.find( record.raw.Tags._tagsNameArray, function( tag ) {
 												return ( tag.Name == 'Customer Voice' );
 											} ) ) ) {
 										featureId = this.cvFeatureId;
+									} else if ( record.raw.Feature ) {
+										featureId = record.raw.Feature.ObjectID;
 									} else if ( record.get('_type') == 'defect' ) {
 										featureId = this.defectFeatureId;
 									}
@@ -121,8 +117,6 @@
 									this.totalPoints += record.raw.PlanEstimate;
 								},this);
 							
-							console.log( this.features);
-							console.log( 'Loading Features...' );
 							this._myMask.msg = 'Loading Features...';
 							this.loadFeatures( 0 );
 						}
@@ -135,7 +129,6 @@
 	},
 	
 	loadFeatures: function( featureIndex ) {
-		console.log( 'Feature Index = ' + featureIndex);
 		var keys = Object.keys( this.features );
 		
 		if ( featureIndex >= keys.length ) {
@@ -189,7 +182,6 @@
 	
 	compileData: function(){
 		this._myMask.msg = 'Compiling Data...';
-		console.log( 'Compiling Data ... ' );
 		
 		var investmentSums = {};
 		_.each( this.features, function( feature ) {
@@ -263,7 +255,7 @@
 		this._myMask.hide();
 		this.add({
 			xtype: 'label',
-			text: 'There is no data. Check if there are iterations in scope and work items with PlanEstimate assigned for iterations'
+			text: 'There is no data. Check if there are work items assigned for the Release.'
 		});
 	}
 });
