@@ -1,8 +1,22 @@
 Ext.define('CustomApp', {
 	extend: 'Rally.app.TimeboxScopedApp',
 	scopeType: 'release',
-	noFeatureId: 0,
-	noInvestmentCategory: 'Unplanned',
+	
+	noFeatureId: 3,
+	noInvestmentCategory: 'Unplanned Stories',
+	noInvestmentColor: '#666',
+	
+	cvFeatureId: 1,
+	cvInvestmentCategory: 'CV Defects',
+	cvInvestmentColor: '#FF8200',
+	
+	defectFeatureId: 2,
+	defectInvestmentCategory: 'non-CV Defects',
+	defectInvestmentColor: '#F6A900',
+	
+	colors: [ '#B81B10', '#FAD200', '#F66349', '#FFDD82' ],
+	
+	chartColors: [],
 	features: [],
 	workItems: [],
 	totalPoint: 0,
@@ -13,7 +27,6 @@ Ext.define('CustomApp', {
 	},
 	
 	start: function( scope ) {
-		console.log( 'Starting...');	
 		// Delete any existing UI components
 		if( this.down( 'rallychart' ) ) {
 			this.down( 'rallychart' ).destroy();
@@ -22,7 +35,7 @@ Ext.define('CustomApp', {
 			this.down( 'label' ).destroy();
 		}
 		
-		console.log( 'Adding mask...');
+		// ( 'Adding mask...');
 		// Show loading message
 		this._myMask = new Ext.LoadMask( Ext.getBody(),
 			{
@@ -31,14 +44,14 @@ Ext.define('CustomApp', {
 		);
 		this._myMask.show();
 		
-		console.log( 'Building Store...');
+		// ( 'Building Store...');
 		// Load all the work items for this release
 		var dataScope = this.getContext().getDataContext();
 		var store = Ext.create(
 			'Rally.data.wsapi.artifact.Store',
 			{
-				models: ['UserStory','Defect','DefectSuite'],
-				fetch: ['ObjectID','PlanEstimate','Feature'],
+				models: ['UserStory','Defect'],
+				fetch: ['ObjectID','PlanEstimate','Feature','Tags'],
 				filters: [
 					{
 						property: 'Release.Name',
@@ -51,15 +64,28 @@ Ext.define('CustomApp', {
 			this
 		);
 		
-		console.log( 'Resetting global variables' );
+		// ( 'Resetting global variables...' );
 		this.features = {};
+		
+		this.features[ this.cvFeatureId ] = {};
+		this.features[ this.cvFeatureId ].estimate = 0;
+		this.features[ this.cvFeatureId ].investmentCategory = this.cvInvestmentCategory;
+		this.chartColors.push( this.cvInvestmentColor );
+		
+		this.features[ this.defectFeatureId ] = {};
+		this.features[ this.defectFeatureId ].estimate = 0;
+		this.features[ this.defectFeatureId ].investmentCategory = this.defectInvestmentCategory;
+		this.chartColors.push( this.defectInvestmentColor );
+		
 		this.features[ this.noFeatureId ] = {};
 		this.features[ this.noFeatureId ].estimate = 0;
 		this.features[ this.noFeatureId ].investmentCategory = this.noInvestmentCategory;
+		this.chartColors.push( this.noInvestmentColor );
+		
 		this.workItems = [];
 		this.totalPoints = 0;
 		
-		console.log( 'Loading Store...');		
+		// ( 'Loading Store...');		
 		store.load( {
 				scope: this,
 				callback: function( records, operation ) {
@@ -69,6 +95,12 @@ Ext.define('CustomApp', {
 									var featureId = this.noFeatureId;
 									if ( record.raw.Feature ) {
 										featureId = record.raw.Feature.ObjectID;
+									} else if ( record.raw.Tags && ( _.find( record.raw.Tags._tagsNameArray, function( tag ) {
+												return ( tag.Name == 'Customer Voice' );
+											} ) ) ) {
+										featureId = this.cvFeatureId;
+									} else if ( record.get('_type') == 'defect' ) {
+										featureId = this.defectFeatureId;
 									}
 									if( !( featureId in this.features ) ) {
 										this.features[ featureId ] = {};
@@ -79,8 +111,8 @@ Ext.define('CustomApp', {
 									this.totalPoints += record.raw.PlanEstimate;
 								},this);
 							
-							console.log( this.features);
-							console.log( 'Loading Features...' );
+							// ( this.features);
+							// ( 'Loading Features...' );
 							this._myMask.msg = 'Loading Features...';
 							this.loadFeatures( 0 );
 						}
@@ -93,12 +125,14 @@ Ext.define('CustomApp', {
 	},
 	
 	loadFeatures: function( featureIndex ) {
-		console.log( 'Feature Index = ' + featureIndex);
+		// ( 'Feature Index = ' + featureIndex);
 		var keys = Object.keys( this.features );
 		
 		if ( featureIndex >= keys.length ) {
 			this.compileData();
-		} else if ( keys[ featureIndex ] == this.noFeatureId ) {
+		} else if ( ( keys[ featureIndex ] == this.noFeatureId ) ||
+					( keys[ featureIndex ] == this.defectFeatureId ) ||
+					( keys[ featureIndex ] == this.cvFeatureId ) ) {
 			this.loadFeatures( featureIndex + 1 );
 		} else {
 			// Set a default as an error here
@@ -145,15 +179,21 @@ Ext.define('CustomApp', {
 	
 	compileData: function(){
 		this._myMask.msg = 'Compiling Data...';
-		console.log( 'Compiling Data ... ' );
+		// ( 'Compiling Data ... ' );
 		
 		var investmentSums = {};
 		_.each( this.features, function( feature ) {
 			if( !( feature.investmentCategory in investmentSums ) ) {
 				investmentSums[ feature.investmentCategory ] = 0;
+				
+				// push on more colors if we're past the first set of sums
+				var keysLength = Object.keys( investmentSums ).length;
+				if ( keysLength > 3 ) {
+					this.chartColors.push( this.colors[ ( keysLength - 4 ) % this.colors.length ] );
+				}
 			}
 			investmentSums[ feature.investmentCategory ] += feature.estimate;
-		});
+		}, this);
 		
 		var series = [];
 		series.push( {} );
@@ -204,7 +244,7 @@ Ext.define('CustomApp', {
 		});
 		
 		// Workaround bug in setting colors - http://stackoverflow.com/questions/18361920/setting-colors-for-rally-chart-with-2-0rc1/18362186
-		chart.setChartColors( [ '#005EB8', '#FF8200', '#FAD200', '#7CAFD7', '#F6A900', '#FFDD82' ] );
+		chart.setChartColors( this.chartColors );
 		
 		this._myMask.hide();
 	},
@@ -213,7 +253,7 @@ Ext.define('CustomApp', {
 		this._myMask.hide();
 		this.add({
 			xtype: 'label',
-			text: 'There is no data. Check if there are iterations in scope and work items with PlanEstimate assigned for iterations'
+			text: 'There is no data. Check if there are work items assigned for the Release.'
 		});
 	}
 });
