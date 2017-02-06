@@ -2,6 +2,23 @@ Ext.define('CustomApp', {
 	extend: 'Rally.app.TimeboxScopedApp',
 	scopeType: 'release',
 	
+	// Settings
+	getSettingsFields: function() {
+		return [
+			{
+				name: 'onlyshowaccepted',
+				xtype: 'rallycheckboxfield',
+				fieldLabel: '',
+				boxLabel: 'Only show accepted work items.'
+			}
+		];
+	},
+	config: {
+        defaultSettings: {
+            onlyshowaccepted: true
+        }
+    },
+	
 	noFeatureId: 3,
 	noInvestmentCategory: 'Unplanned Stories',
 	noInvestmentColor: '#666',
@@ -38,7 +55,7 @@ Ext.define('CustomApp', {
 		// Show loading message
 		this._myMask = new Ext.LoadMask( Ext.getBody(),
 			{
-				msg: "Loading work items..."
+				msg: "Loading..."
 			}
 		);
 		this._myMask.show();
@@ -54,18 +71,26 @@ Ext.define('CustomApp', {
 					{
 						property: 'Release.Name',
 						value: scope.record.data.Name
-					} /*,  //Only look at accepted work items
-					{
-						property: 'ScheduleState',
-						operator: '>=',
-						value: 'Accepted'
-					} */
+					}
 				],
 				context: dataScope,
 				limit: Infinity
 			},
 			this
 		);
+		
+		// Check if the settings say we should only look at accepted work items
+		var onlyShowAccepted = this.getSetting( 'onlyshowaccepted' );
+		if ( onlyShowAccepted ) {
+			var acceptedFilter = Ext.create('Rally.data.wsapi.Filter',
+				{
+					property: 'ScheduleState',
+					operator: '>=',
+					value: 'Accepted'
+				}
+			);				
+			store.addFilter(acceptedFilter, false);
+		}
 		
 		// Resetting global variables
 		this.features = {};
