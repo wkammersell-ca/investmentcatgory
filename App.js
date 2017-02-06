@@ -150,11 +150,7 @@ Ext.define('CustomApp', {
 	},
 	
 	loadFeatures: function( featureIndex ) {
-		console.log( featureIndex );
-		
 		var keys = Object.keys( this.features );
-		console.log( keys.length );
-		
 		if ( featureIndex >= keys.length ) {
 			this.compileData();
 		} else if ( ( keys[ featureIndex ] == this.noFeatureId ) ||
