@@ -141,8 +141,8 @@ Ext.define('CustomApp', {
 							this._myMask.msg = 'Loading Features...';
 							this.loadFeatures( 0 );
 						}
-						else if(records.length === 0 && this.features.length === 0){
-								this.showNoDataBox();	
+						else {
+							this.showNoDataBox();	
 						}
 					}
 				}
@@ -150,7 +150,10 @@ Ext.define('CustomApp', {
 	},
 	
 	loadFeatures: function( featureIndex ) {
+		console.log( featureIndex );
+		
 		var keys = Object.keys( this.features );
+		console.log( keys.length );
 		
 		if ( featureIndex >= keys.length ) {
 			this.compileData();
@@ -276,7 +279,7 @@ Ext.define('CustomApp', {
 		this._myMask.hide();
 		this.add({
 			xtype: 'label',
-			text: 'There is no data. Check if there are work items assigned for the Release.'
+			text: 'No data was found. Check if there are work items assigned for the Release. You may also need to include Child and/or Parent projects in your scope.'
 		});
 	}
 });
