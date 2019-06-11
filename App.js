@@ -1,6 +1,7 @@
 Ext.define('CustomApp', {
 	extend: 'Rally.app.TimeboxScopedApp',
 	scopeType: 'release',
+	stateful: true,
 	
 	// Settings
 	getSettingsFields: function() {
@@ -38,49 +39,182 @@ Ext.define('CustomApp', {
 	workItems: [],
 	totalPoint: 0,
 	
-	onScopeChange: function( scope ) {
-		this.callParent( arguments );
-		this.start( scope );
+	filterContainer: null,
+	noDataLabel: null,
+	fromDateField: null,
+	toDateField: null,
+	appliedFromDate: null,
+	appliedToDate: null,
+	firstlaunch: false,
+	app: null,
+	
+	launch: function() {
+		app = this;
+		filterContainer = app.down( 'container' );
+		app.firstLaunch = true;
+		app.callParent( arguments );
 	},
 	
-	start: function( scope ) {
-		// Delete any existing UI components
-		if( this.down( 'rallychart' ) ) {
-			this.down( 'rallychart' ).destroy();
+	onScopeChange: function( scope ) {
+		app.callParent( arguments );
+		app.initializeFilters();
+	},
+	
+	getState: function() {
+		if( app.fromDateField && app.toDateField ) {
+			return {
+	        	fromDate: app.fromDateField.value,
+	     		toDate: app.toDateField.value
+			};
+		} else {
+			return {
+	        	fromDate: null,
+	     		toDate: null
+			};
 		}
-		if( this.down( 'label' ) ) {
-			this.down( 'label' ).destroy();
+	},
+	
+	applyState: function(state) {
+	    this.appliedFromDate = state.fromDate;
+	    this.appliedToDate = state.toDate;
+	},
+	
+	// Set up filters, if needed
+	initializeFilters:function(){
+		app.hideHeader( false );
+		
+		// Show start and end data filters if we're not on a release-filtered page
+		// The filter container will be automatically added by the app if we're not on a release-filtered page
+		if ( filterContainer ) {
+			var orLabelId = 'orLabel';
+			var fromDateFieldId = 'fromDateFilter';
+			var toDateFieldId = 'toDateFilter';
+			var beginButtonId = 'beginButton';
+		
+			var beginButton = filterContainer.down( '#' + beginButtonId );
+			
+			if( !beginButton ) {
+				filterContainer.add( {
+					xtype: 'label',
+					html: '--or--',
+					anchor: '100%',
+					itemId: orLabelId
+				} );
+			
+				app.fromDateField = filterContainer.add( {
+					xtype: 'datefield',
+					anchor: '100%',
+					fieldLabel: 'From',
+					itemId: fromDateFieldId,
+					name: 'from_date',
+					value: this.appliedFromDate ? new Date( this.appliedFromDate ) : null
+				} );
+			
+				app.toDateField = filterContainer.add( {
+					xtype: 'datefield',
+					anchor: '100%',
+					fieldLabel: 'To',
+					itemId: toDateFieldId,
+					name: 'to_date',
+					value: this.appliedToDate ? new Date( this.appliedToDate ) : null
+				} );
+				
+				filterContainer.add( {
+					xtype: 'rallybutton',
+					itemId: beginButtonId,
+					text: 'Apply Release or Date Range',
+					handler: function(){ app.saveState(); app.start( app.fromDateField, app.toDateField ); },
+					style: {
+						'background-color': app.defectInvestmentColor,
+						'border-color': app.defectInvestmentColor
+					}
+				} );
+				
+				// Don't make the user click the Begin button the first time if there are saved values
+				if( app.firstLaunch && ( app.fromDateField.value || app.toDateField.value || app.getContext().getTimeboxScope().getRecord() ) ) {
+					app.firstLaunch = false;
+					app.start( app.fromDateField, app.toDateField );
+				}
+			}
+		} else {
+			app.start( null, null );
+		}
+	},
+	
+	hideHeader:function( hiddenValue ) {
+		if( filterContainer ) {
+			filterContainer.setVisible( !hiddenValue );
+		}
+	},
+	
+	start: function( fromDateField, toDateField ) {
+		// Delete any existing UI components
+		if( app.down( 'rallychart' ) ) {
+			app.down( 'rallychart' ).destroy();
+		}
+		if( app.noDataLabel ) {
+			app.noDataLabel.destroy();
 		}
 		
 		// Show loading message
-		this._myMask = new Ext.LoadMask( Ext.getBody(),
+		app._myMask = new Ext.LoadMask( Ext.getBody(),
 			{
 				msg: "Loading..."
 			}
 		);
-		this._myMask.show();
+		app._myMask.show();
 		
-		// Load all the work items for this release
-		var dataScope = this.getContext().getDataContext();
+		var dataScope = app.getContext().getDataContext();
+		var scope = app.getContext().getTimeboxScope().getRecord();
 		var store = Ext.create(
 			'Rally.data.wsapi.artifact.Store',
 			{
 				models: ['UserStory','Defect'],
 				fetch: ['ObjectID','PlanEstimate','Feature','Tags'],
-				filters: [
-					{
-						property: 'Release.Name',
-						value: scope.record.data.Name
-					}
-				],
 				context: dataScope,
 				limit: Infinity
 			},
-			this
+			app
 		);
 		
+		if ( !fromDateField && !toDateField && scope ) {
+			// Load all the work items for app release
+			var releaseFilter = Ext.create('Rally.data.wsapi.Filter',
+				{
+					property: 'Release.Name',
+					value: scope.data.Name
+				}
+			);				
+			store.addFilter( releaseFilter, false );
+		} else {
+			if ( fromDateField ) {
+				if ( fromDateField.value ) {
+					var fromDateFilter = Ext.create('Rally.data.wsapi.Filter',
+						{
+							property: 'InProgressDate',
+							operator: '>=',
+							value: fromDateField.value
+						}
+					);				
+					store.addFilter( fromDateFilter, false );
+				}
+			}
+			if ( toDateField ) {
+				if ( toDateField.value ) {
+					var toDateFilter = Ext.create('Rally.data.wsapi.Filter',
+						{
+							property: 'AcceptedDate',
+							operator: '<=',
+							value: toDateField.value
+						}
+					);				
+					store.addFilter( toDateFilter, false );
+				}
+			}
+		}
+		
 		// Check if the settings say we should only look at accepted work items
-		var onlyShowAccepted = this.getSetting( 'onlyshowaccepted' );
+		var onlyShowAccepted = app.getSetting( 'onlyshowaccepted' );
 		if ( onlyShowAccepted ) {
 			var acceptedFilter = Ext.create('Rally.data.wsapi.Filter',
 				{
@@ -93,56 +227,56 @@ Ext.define('CustomApp', {
 		}
 		
 		// Resetting global variables
-		this.features = {};
+		app.features = {};
 		
-		this.features[ this.cvFeatureId ] = {};
-		this.features[ this.cvFeatureId ].estimate = 0;
-		this.features[ this.cvFeatureId ].investmentCategory = this.cvInvestmentCategory;
-		this.chartColors.push( this.cvInvestmentColor );
+		app.features[ app.cvFeatureId ] = {};
+		app.features[ app.cvFeatureId ].estimate = 0;
+		app.features[ app.cvFeatureId ].investmentCategory = app.cvInvestmentCategory;
+		app.chartColors.push( app.cvInvestmentColor );
 		
-		this.features[ this.defectFeatureId ] = {};
-		this.features[ this.defectFeatureId ].estimate = 0;
-		this.features[ this.defectFeatureId ].investmentCategory = this.defectInvestmentCategory;
-		this.chartColors.push( this.defectInvestmentColor );
+		app.features[ app.defectFeatureId ] = {};
+		app.features[ app.defectFeatureId ].estimate = 0;
+		app.features[ app.defectFeatureId ].investmentCategory = app.defectInvestmentCategory;
+		app.chartColors.push( app.defectInvestmentColor );
 		
-		this.features[ this.noFeatureId ] = {};
-		this.features[ this.noFeatureId ].estimate = 0;
-		this.features[ this.noFeatureId ].investmentCategory = this.noInvestmentCategory;
-		this.chartColors.push( this.noInvestmentColor );
+		app.features[ app.noFeatureId ] = {};
+		app.features[ app.noFeatureId ].estimate = 0;
+		app.features[ app.noFeatureId ].investmentCategory = app.noInvestmentCategory;
+		app.chartColors.push( app.noInvestmentColor );
 		
-		this.workItems = [];
-		this.totalPoints = 0;
+		app.workItems = [];
+		app.totalPoints = 0;
 		
 		store.load( {
-				scope: this,
+				scope: app,
 				callback: function( records, operation ) {
 					if( operation.wasSuccessful() ) {
 						if (records.length > 0) {
 								_.each(records, function(record){
-									var featureId = this.noFeatureId;
+									var featureId = app.noFeatureId;
 									if ( record.raw.Tags && ( _.find( record.raw.Tags._tagsNameArray, function( tag ) {
 												return ( tag.Name == 'Customer Voice' );
 											} ) ) ) {
-										featureId = this.cvFeatureId;
+										featureId = app.cvFeatureId;
 									} else if ( record.raw.Feature ) {
 										featureId = record.raw.Feature.ObjectID;
 									} else if ( record.get('_type') == 'defect' ) {
-										featureId = this.defectFeatureId;
+										featureId = app.defectFeatureId;
 									}
-									if( !( featureId in this.features ) ) {
-										this.features[ featureId ] = {};
-										this.features[ featureId ].estimate = 0;
-										this.features[ featureId ].investmentCategory = this.noInvestmentCategory;
+									if( !( featureId in app.features ) ) {
+										app.features[ featureId ] = {};
+										app.features[ featureId ].estimate = 0;
+										app.features[ featureId ].investmentCategory = app.noInvestmentCategory;
 									}
-									this.features[ featureId ].estimate += record.raw.PlanEstimate;
-									this.totalPoints += record.raw.PlanEstimate;
-								},this);
+									app.features[ featureId ].estimate += record.raw.PlanEstimate;
+									app.totalPoints += record.raw.PlanEstimate;
+								},app);
 							
-							this._myMask.msg = 'Loading Features...';
-							this.loadFeatures( 0 );
+							app._myMask.msg = 'Loading Features...';
+							app.loadFeatures( 0 );
 						}
 						else {
-							this.showNoDataBox();	
+							app.showNoDataBox();	
 						}
 					}
 				}
@@ -150,19 +284,19 @@ Ext.define('CustomApp', {
 	},
 	
 	loadFeatures: function( featureIndex ) {
-		var keys = Object.keys( this.features );
+		var keys = Object.keys( app.features );
 		if ( featureIndex >= keys.length ) {
-			this.compileData();
-		} else if ( ( keys[ featureIndex ] == this.noFeatureId ) ||
-					( keys[ featureIndex ] == this.defectFeatureId ) ||
-					( keys[ featureIndex ] == this.cvFeatureId ) ) {
-			this.loadFeatures( featureIndex + 1 );
+			app.compileData();
+		} else if ( ( keys[ featureIndex ] == app.noFeatureId ) ||
+					( keys[ featureIndex ] == app.defectFeatureId ) ||
+					( keys[ featureIndex ] == app.cvFeatureId ) ) {
+			app.loadFeatures( featureIndex + 1 );
 		} else {
 			// Set a default as an error here
-			this.features[ keys[ featureIndex ] ].investmentCategory = 'Unknown';
+			app.features[ keys[ featureIndex ] ].investmentCategory = 'Unknown';
 			
 			var dataScope = {
-				workspace: this.getContext().getWorkspaceRef(),
+				workspace: app.getContext().getWorkspaceRef(),
 				project: null
 			};
 			
@@ -180,42 +314,42 @@ Ext.define('CustomApp', {
 					context: dataScope,
 					limit: Infinity
 				},
-				this
+				app
 			);
 			
 			store.load( {
-				scope: this,
+				scope: app,
 				callback: function( records, operation ) {
 					if( operation.wasSuccessful() ) {
 						if (records.length > 0) {
 							_.each(records, function( record ){
 								var featureId = record.raw.ObjectID;
-								this.features[ featureId ].investmentCategory = record.raw.InvestmentCategory;									
-							},this);
+								app.features[ featureId ].investmentCategory = record.raw.InvestmentCategory;									
+							},app);
 						}
 					}	
-					this.loadFeatures( featureIndex + 1 );
+					app.loadFeatures( featureIndex + 1 );
 				}
 			});
 		}
 	},
 	
 	compileData: function(){
-		this._myMask.msg = 'Compiling Data...';
+		app._myMask.msg = 'Compiling Data...';
 		
 		var investmentSums = {};
-		_.each( this.features, function( feature ) {
+		_.each( app.features, function( feature ) {
 			if( !( feature.investmentCategory in investmentSums ) ) {
 				investmentSums[ feature.investmentCategory ] = 0;
 				
 				// push on more colors if we're past the first set of sums
 				var keysLength = Object.keys( investmentSums ).length;
 				if ( keysLength > 3 ) {
-					this.chartColors.push( this.colors[ ( keysLength - 4 ) % this.colors.length ] );
+					app.chartColors.push( app.colors[ ( keysLength - 4 ) % app.colors.length ] );
 				}
 			}
 			investmentSums[ feature.investmentCategory ] += feature.estimate;
-		}, this);
+		}, app);
 		
 		var series = [];
 		series.push( {} );
@@ -227,16 +361,16 @@ Ext.define('CustomApp', {
 			series[0].data.push(
 				{
 					name: investmentCategory,
-					y: investmentSums[ investmentCategory ] / this.totalPoints
+					y: investmentSums[ investmentCategory ] / app.totalPoints
 				}
 			);
-		}, this );
+		}, app );
 							
-		this.makeChart( series );
+		app.makeChart( series );
 	},
 	
 	makeChart: function( series ){
-		var chart = this.add({
+		var chart = app.add({
 				xtype: 'rallychart',
 				chartConfig: {
 					chart:{
@@ -266,14 +400,14 @@ Ext.define('CustomApp', {
 		});
 		
 		// Workaround bug in setting colors - http://stackoverflow.com/questions/18361920/setting-colors-for-rally-chart-with-2-0rc1/18362186
-		chart.setChartColors( this.chartColors );
+		chart.setChartColors( app.chartColors );
 		
-		this._myMask.hide();
+		app._myMask.hide();
 	},
 	
 	showNoDataBox:function(){
-		this._myMask.hide();
-		this.add({
+		app._myMask.hide();
+		app.noDataLabel = app.add({
 			xtype: 'label',
 			text: 'No data was found. Check if there are work items assigned for the Release. You may also need to include Child and/or Parent projects in your scope.'
 		});
