@@ -125,8 +125,8 @@ Ext.define('CustomApp', {
 					text: 'Apply Release or Date Range',
 					handler: function(){ app.saveState(); app.start( app.fromDateField, app.toDateField ); },
 					style: {
-						'background-color': app.defectInvestmentColor,
-						'border-color': app.defectInvestmentColor
+						'background-color': app.colors[0],
+						'border-color': app.colors[0]
 					}
 				} );
 				
@@ -177,7 +177,10 @@ Ext.define('CustomApp', {
 			app
 		);
 		
-		if ( !fromDateField && !toDateField && scope ) {
+		var fromDate = fromDateField ? fromDateField.value : null;
+		var toDate = toDateField ? toDateField.value : null;
+		
+		if ( !fromDate && !toDate && scope ) {
 			// Load all the work items for app release
 			var releaseFilter = Ext.create('Rally.data.wsapi.Filter',
 				{
@@ -187,29 +190,25 @@ Ext.define('CustomApp', {
 			);				
 			store.addFilter( releaseFilter, false );
 		} else {
-			if ( fromDateField ) {
-				if ( fromDateField.value ) {
-					var fromDateFilter = Ext.create('Rally.data.wsapi.Filter',
-						{
-							property: 'InProgressDate',
-							operator: '>=',
-							value: fromDateField.value
-						}
-					);				
-					store.addFilter( fromDateFilter, false );
-				}
+			if ( fromDate) {
+				var fromDateFilter = Ext.create('Rally.data.wsapi.Filter',
+					{
+						property: 'InProgressDate',
+						operator: '>=',
+						value: fromDateField.value
+					}
+				);				
+				store.addFilter( fromDateFilter, false );
 			}
-			if ( toDateField ) {
-				if ( toDateField.value ) {
-					var toDateFilter = Ext.create('Rally.data.wsapi.Filter',
-						{
-							property: 'AcceptedDate',
-							operator: '<=',
-							value: toDateField.value
-						}
-					);				
-					store.addFilter( toDateFilter, false );
-				}
+			if ( toDate ) {
+				var toDateFilter = Ext.create('Rally.data.wsapi.Filter',
+					{
+						property: 'AcceptedDate',
+						operator: '<=',
+						value: toDateField.value
+					}
+				);				
+				store.addFilter( toDateFilter, false );
 			}
 		}
 		
@@ -228,6 +227,7 @@ Ext.define('CustomApp', {
 		
 		// Resetting global variables
 		app.features = {};
+		app.chartColors = [];
 		
 		app.features[ app.cvFeatureId ] = {};
 		app.features[ app.cvFeatureId ].estimate = 0;
